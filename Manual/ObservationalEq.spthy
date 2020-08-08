@@ -1,0 +1,26 @@
+// Generate a public key and output it
+// Choose two fresh values and reveal one of it
+// Encrypt either the first or the second fresh value
+
+theory ObservationalEquivalence
+begin
+
+builtins: asymmetric-encryption
+
+rule Example:
+    [ Fr(~ltk), Fr(~a), Fr(~b) ]
+    --[ Secret( ~b ) ]->
+    [ Out( pk(~ltk) ), Out( ~a ), Out( aenc( diff(~a,~b), pk(~ltk) )) ]
+
+// In this example, the intruder cannot compute ~b as formalized by the following lemma:
+
+// The intruder cannot know ~b
+// ~b is claimed secret implies 
+// the adversary does not know '~b'
+
+lemma B_is_secret:
+    " 
+    All B #i. ( Secret(B) @ #i ==> not( Ex #j. K(B) @ #j ))
+    "
+
+end

@@ -1,0 +1,9 @@
+1. C -> S: C, nc, sid, pc
+
+2. C <- S: ns, sid, ps
+
+3. C -> S: { '31', pms }pk(S) ,
+            sign{ '32', h('32', ns, S, pms) }pk(C) ,
+            { '33', sid, PRF(pms, nc, ns), nc, pc, C, ns, ps, S }h('clientKey', nc, ns, PRF(pms, nc, ns))
+
+4. C <- S: { '4', sid, PRF(pms, nc, ns), nc, pc, C, ns, ps, S }h('serverKey', nc, ns, PRF(pms, nc, ns))

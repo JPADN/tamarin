@@ -1,0 +1,15 @@
+theory Teste2
+begin
+
+builtins: asymmetric-encryption, diffie-hellman
+
+rule A1:
+[ Fr(~k), !Pk($S, pks) ] --> [ !TidA($S, ~k), Out(aenc(~k,pks)) ]
+
+rule B2:
+[ In(secret), !Ltk($S, ~ltks) ] --> [ h(adec(secret, ~ltks)) ]
+
+rule A2:
+[ In(h(k)) ] --> [ ]
+
+end

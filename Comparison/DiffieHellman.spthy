@@ -1,0 +1,32 @@
+
+theory DiffieHellman
+begin
+
+builtins: diffie-hellman
+functions: mac/2, shk/0 [private]  // Message Authentication Code and Constant Shared Secret Key
+
+rule Client: 
+    let 
+        clientpub = 'g'^(~c_exp) 
+    in
+    [ Fr(~tid), Fr(~c_exp) ]
+    -->
+    [ Thread(~tid, $A, $B), Out(< clientpub, mac(shk, < clientpub, $A, $B >) >) ]
+
+rule Server:
+    let 
+        secret = peerpub^(~s_exp)
+    in
+    [ Fr(~s_exp), Thread(tid, A, B), In(< peerpub, mac(shk, <peerpub,B,A>) >) ]
+    --[ Accept(tid, secret) ]->
+    []
+
+rule RevealKey:
+    [] --[ Reveal() ]-> [ Out(shk) ]
+
+lemma Accept_Secret:
+    "
+    All #i #j tid secret. Accept(tid, secret) @ #i & K(secret) @ #j ==> Ex #n. Reveal() @ #n & #n < #i
+    "
+
+end

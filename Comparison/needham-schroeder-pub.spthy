@@ -1,0 +1,96 @@
+theory NeedhamShroederPKI
+begin
+
+builtins: asymmetric-encryption
+
+/* ----------------------------------- PKI ---------------------------------- */
+
+rule Register_pk:
+  [ Fr(~ltkA) ]
+  -->
+  [ !Ltk($A, ~ltkA), !Pk($A, pk(~ltkA)), Out(pk(~ltkA)) ]
+
+rule Reveal_ltk:
+    [ !Ltk(A, ltk) ]
+    --[ LtkReveal(A) ]->
+    [ Out(ltk) ]
+
+/* -------------------------- Roles initialization -------------------------- */
+
+rule Init_A:
+    [ !Pk(B,pkB), !Ltk(A,ltkA), Fr(~na) ]
+    -->
+    [ !Tid_A(A, B, pkB, ltkA, ~na) ]
+
+rule Init_B:
+    [ !Pk(A,pkA), !Ltk(B,ltkB), Fr(~nb) ]
+    -->
+    [ !Tid_B(A, B, pkA, ltkB, ~nb) ]
+
+/* ---------------------------- Protocol messages --------------------------- */
+
+rule 1_A_send_B:
+    [ !Tid_A(A, B, pkB, ltkA, na) ]
+    --[ ASendB(A, B, na), ASentB(A,B) ]->
+    [ Out(aenc(<na, A>, pkB)), !Tid_A2(A, B, pkB, ltkA, na) ]
+
+rule 2_B_recv_send_A:
+	let
+        cipher = aenc(<na, A>, pkB)
+    in
+    [ !Tid_B(A, B, pkA, ltkB, nb), In(cipher) ]
+    --[ BSendA(B, A, na, nb), BSentA(B,A) , Eq(snd(adec(cipher,ltkB)), A) ]->
+    [ Out(aenc(<na, nb>, pkA)), !Tid_B2(A, B, pkA, ltkB, nb) ]
+
+rule 3_A_recv_send_B:
+	let
+        cipher = aenc(<na, nb>, pkA)
+    in
+    [ !Tid_A2(A, B, pkB, ltkA, na), In(cipher) ]
+    --[ Eq(snd(adec(cipher, ltkA)),na) ]->
+    [ Out(aenc(nb, pkB)), !Tid_Final(A,B,na,nb) ]
+
+rule 4_B_recv:
+    [ !Tid_B2(A, B, pkA, ltkB, nb), !Tid_Final(A,B,na,nb), In(aenc(nbx,pkB)) ]
+    --[ Eq(adec(aenc(nbx,pkB), ltkB), nb),  SessionEstablished(A,B,na,nb) ]->
+    []
+
+/* ------------------------------ Restrictions ------------------------------ */
+
+restriction Equality:
+    "
+    All x y #i. Eq(x,y) @i ==> x = y
+    " 
+
+/* ------------------------- Partial desconstructions ------------------------ */
+
+lemma types [sources]:
+    " 
+    (All B A na nb #i. BSendA(B, A, na, nb) @ i
+    ==>
+        ( (Ex #j. KU(na) @ j & j < i)
+        | (Ex #j. ASendB(A, B, na) @ j) )
+    )
+    "
+
+/* --------------------------- Security properties -------------------------- */
+
+lemma nonce_secrecy:
+    "
+    not( Ex A B na nb #i.
+        /* somebody claims to have setup a shared secret, */
+        SessionEstablished(A,B,na,nb) @ i
+        /* but the adversary knows it */
+        & (Ex #j. K(na) @ j)
+        /* without having performed a long-term key reveal. */
+        & not (Ex #r. LtkReveal(A) @ r)
+        & not (Ex #r. LtkReveal(B) @ r)
+    )
+    "
+/*
+lemma Accept_Secret:
+    "
+    All A B na nb #i #j. SessionEstablished(A, B, na, nb) @ #i & K(nb) @ #j ==> Ex X #n. LtkReveal(X) @ #n & #n < #i
+    "
+*/    
+end

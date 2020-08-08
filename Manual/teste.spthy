@@ -1,0 +1,33 @@
+theory Teste
+begin
+
+builtins: asymmetric-encryption, hashing
+
+rule KeyGen:
+    [ Fr(~priv) ] --> [ !Ltk($X, ~priv), !Pk($X, pk(~priv)) ]
+
+rule ClientHello:
+    [ !Ltk(client,clientpriv), !Pk(server, serverpub), Fr(~key), Fr(~id) ] 
+    --> 
+    [ !TidClient(~id, client, server, ~key ), Out(aenc(~key,serverpub)) ]
+
+rule ServerRecvSend:
+    let 
+        key = adec(cipher, serverpriv)
+    in
+    [ !Ltk(server, serverpriv), !Pk(client, clientpub), In(cipher), Fr(~id) ] 
+    --> 
+    [ !TidServer(~id, server, client, key), Out(h(key)) ]
+
+rule ClientRecvHash:
+    [ !TidClient(id,client,server,key), In(hash) ]
+    --[ SessionKey(client, server, key) ]->
+    [] 
+
+
+lemma Session_key_secrecy:
+    "
+    All C S symkey #i. 
+        SessionKey(C,S, symkey) @ i ==> not( Ex #j. K(symkey) @ j )
+    "
+end

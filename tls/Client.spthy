@@ -1,0 +1,144 @@
+// model HMAC, HKDF
+
+/*
+
+ -------------------------------- Correct: -------------------------------- 
+
+AEADEncrypted = AEAD-Encrypt( [sender]_write_key, nonce, additional_data, plaintext ))
+- [sender]_write_key = HKDF-Expand-Label( Secret, “key”, “”, key_length )
+    - Secret = [sender]_application_traffic_secret_N  or [sender]_handshake_traffic_secret
+
+[sender]_application_traffic_secret = Derive-secret( HKDF-Extract(0,salt), "c ap traffic", ClientHello...server Finished )
+[sender]_handshake_traffic_secret = Derive-secret( HKDF-Extract(EC(DHE),salt)), "c hs traffic", ClientHello...ServerHello )
+- Derive-Secret = HKDF-Expand-Label(Secret, Label, Transcript-Hash(Messages), Hash.length)
+
+Finished = verify_data =  HMAC( finished_key, Transcript-Hash )
+finished_key =  HKDF-Expand-Label( [sender]_handshake_traffic_secret, “finished”, “” , Hash.length )
+HMAC = h(k2 | h(k1|m))  k1,k2 are derived from k --> 2 constants XORed with the key k
+
+HKDF-Extract(salt, IKM) -> PRK
+PRK = HMAC-Hash(salt, IKM)
+
+ -------------------------------- Current: -------------------------------- 
+
+Encryption of messages is with handshake_traffic_secret, application_traffic_secret
+
+[sender]_hanshake_traffic_secret = handshake_traffic_secret
+[sender]_application_traffic_secret = application_traffic_secret
+
+handshake_traffic_secret = h(EC(DHE), h(ClientHello...ServerHello))
+application_traffic_secret = h(EC(DHE), h(ClientHello...ServerFinished))
+ 
+
+HMAC = h(k|m)
+finished_key is derived from [sender]_handshake_traffic_secret
+finished_key = handshake_traffic_secret
+*/
+
+theory TLS1_3_Hanshake
+begin
+
+builtins: symmetric-encryption, signing, hashing
+
+functions: PRF/1
+
+equations: 
+
+/* ------------------------------------ PKI ----------------------------------- */
+
+rule Register_pk:
+  [ Fr(~ltkA) ]
+  -->
+  [ !Ltk($A, ~ltkA), !Pk($A, pk(~ltkA)), Out(pk(~ltkA)) ]
+
+rule Reveal_ltk:
+  [ !Ltk(A, ltkA) ] --[ RevLtk(A) ]-> [ Out(ltkA) ]
+
+/* ------------------------------------  ----------------------------------- */
+
+
+rule Client_hello:
+	let
+        ClientHello = < $C, $S, ~c_keyshare, ~c_random >
+    in
+    [ Fr(~c_random), Fr(~c_keyshare), !Ltk($C, ~ltkC) ]
+    --[  ]->
+    [ State_C( ClientHello, ~ltkC ), Out(ClientHello) ]
+
+// [sender]_handshake_traffic_secret = Derive-secret( HKDF-Extract(EC(DHE),salt)), "c hs traffic", ClientHello...ServerHello )
+// - Derive-Secret = HKDF-Expand-Label(Secret, Label, Transcript-Hash(Messages), Hash.length)
+
+// AEADEncrypted = AEAD-Encrypt( [sender]_write_key, nonce, additional_data, plaintext ))
+// - [sender]_write_key = HKDF-Expand-Label( Secret, “key”, “”, key_length )
+
+rule Server_hello:
+	let
+        server_dh_secret = ('g'^s_keyshare)^c_keyshare        
+        psk = 0
+        early_secret = h(psk,0) // HKDF-Extract
+        salt = h(early_secret, 'derived', '') // Derive-Secret (HKDF-Expand-Label)
+
+        //server_handshake_traffic_secret = PRF(server_dh_secret, 0, 's hs traffic', c_random, s_random)
+        handshake_secret = h(server_dh_secret, salt) // HKDF-Extract
+        server_handshake_traffic_secret = h(handshake_secret, 's hs traffic', transcript_hash, '') // Derive-Secret (HKDF-Expand-Label)
+        server_write_key = (server_handshake_traffic_secret, 'key', '', '')
+        aead_encrypt(server_write_key, nonce, additional_data, m)
+        // -------- Transcript
+        
+        ClientHello = < C, S, c_keyshare, c_random >        
+        ServerHello = < $S, $C, ~s_keyshare, ~s_random >
+        transcript_hash = ( h(ClientHello, ServerHello) )
+        
+        // --------
+        
+        //finished_key = PRF( server_handshake_traffic_secret, 'finished' )
+        finished_key = ltkS
+        Finished = sign(transcript_hash, finished_key)
+        Certificate = < S, pkS >
+    in
+    
+    [ In(ClientHello), Fr(~s_random), Fr(~s_keyshare), !Ltk(S, ltkS), !Pk(S, pk(ltkS)) ]
+    
+    --[]->
+    
+    [ State_S(ServerHello. ), 
+    Out(ServerHello), Out(senc(Certificate, handshake_traffic_secret)), Out(senc(Finished, handshake_traffic_secret)) ]
+
+
+
+rule Receive_server_hello:
+	let
+        ClientHello = < C, S, c_keyshare, c_random >
+        ServerHello = < S, C, s_keyshare, s_random >
+        
+        client_dh_secret = ('g'^c_keyshare)^s_keyshare
+        transcript_hash = ( h(<ClientHello,ServerHello>) )
+
+        handshake_traffic_secret = h(client_dh_secret, transcript_hash)
+        
+        // --------
+        finished_key = handshake_traffic_secret
+        
+        //HMAC = h(k|m)
+        Finished = h(<finished_key, transcript_hash)
+    
+        Finished_Server = sdec(senc(Finished_cipher, handshake_traffic_secret), handshake_traffic_secret )
+
+    in
+    
+    [ State_CH(< C, S, c_keyshare, c_random >, ltkC), 
+    In( < S, C, s_keyshare, s_random >), // ServerHello 
+    In( senc(Certificate, secret) ) // Certificate
+    In( senc(Finished_cipher, secret) ) ] // Finished
+    
+    --[ Equal(Finished_Server, finished) ]->
+    
+    [ State_CH(C, S, client_handshake_traffic_secret),
+    Out(senc(Finished, client_handshake_traffic_secret )) ]
+
+
+
+
+rule Receive_client_Finished:
+
+    [  ]
