@@ -81,7 +81,7 @@ rule Server_hello:
         //server_handshake_traffic_secret = PRF(server_dh_secret, 0, 's hs traffic', c_random, s_random)
         handshake_secret = h(server_dh_secret, salt) // HKDF-Extract
         server_handshake_traffic_secret = h(handshake_secret, 's hs traffic', transcript_hash, '') // Derive-Secret (HKDF-Expand-Label)
-        server_write_key = (server_handshake_traffic_secret, 'key', '', '')
+        server_write_key = h(server_handshake_traffic_secret, 'key', '', '')
         aead_encrypt(server_write_key, nonce, additional_data, m)
         // -------- Transcript
         
