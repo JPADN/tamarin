@@ -1,0 +1,84 @@
+theory NeedhamSchroederSymmetric
+begin
+
+builtins: hashing, symmetric-encryption
+
+
+rule Init_S:
+    [ Fr(~kas), Fr(~kbs) ]
+    -->
+    [ Init_A(~kas), Init_B(~kbs), Tid_S1($S, ~kas, ~kbs) ]
+
+rule 1_A_S:
+    [ Fr(~na), Init_A(kas) ]
+    -->
+    [ Out(<$A, $B, ~na>), Tid_A1($A, $B, ~na, kas) ]
+
+rule 2_S_A:
+	let
+        x = senc(<~kab,A>,kbs) 
+        m = < na, ~kab, B, x >
+    in
+    [ Fr(~kab), In(<A, B, na>), Tid_S1(S, kas, kbs) ]
+    -->
+    [ Out(senc(m,kas)), Kab(S, ~kab) ] // !Tid_S2(A, B, na, ~kab, kas, kbs)
+
+rule Reveal_kab:
+    [ Kab(S, ~kab) ]
+    --[ RevKab(S) ]->
+    [ Out(~kab) ]
+
+
+rule 3_A_B:
+	let
+        x = senc(<kab,A>,kbs) 
+        m = senc(< na, kab, B, x >, kas)
+        // dec = sdec(m,kas_x)
+        // dec_nonce = fst(dec) // na
+    in
+    [ In(m), Tid_A1(A, B, na, kas)] // !Tid_S2(A,B,na,kab,kas,kbs) (bad modelling)
+    -->
+    [ Out(x), Tid_A2(A, B, na, kas, kab) ] // send kab to B
+
+rule 4_B_A:
+    let
+        x = senc(<kab,A>,kbs) // possible replay attack, B doesn't know if kab is fresh
+        m = senc(~nb,kab)
+    in
+    [ Fr(~nb), In(x), Init_B(kbs) ] // Tid_S2(A,B,na,kab,kas,kbs) (bad modelling)
+     --[]->
+    [ Out(m), Tid_B(A, B, kab) ]
+
+
+rule 5_A_B:
+    let
+        m = senc(nb,kab)
+        x = senc(<h(nb)>, kab)
+    in
+    [ In(m), Tid_A2(A, B, na, kas, kab) ]
+    -->
+    [ Out(x) ]
+
+rule 6_Final:
+    let
+        x = senc(<h(nb)>, kab)
+    in
+    [ In(x), Tid_B(A, B, kab) ]
+    --[ Secret(A, B, kab) ]->
+    []
+
+lemma Replay_attack:
+    "
+    /* It cannot be that */
+    not( Ex A B kab #i.
+        /* somebody claims to have setup a shared secret, */
+        Secret(A, B, kab) @ i
+        /* but the adversary knows it */
+        & (Ex #j. K(kab) @ j)
+        /* without having performed a long-term key reveal. */
+        & not (Ex X #r. RevKab(X) @ r)
+    )
+    "
+
+
+end
