@@ -1,0 +1,123 @@
+/*
+protocol NSLPK3 {
+1. I -> R: {'1',ni,I}pk(R)
+2. I <- R: {'2',ni,nr}pk(I)
+3. I -> R: {'3',nr}pk(R)
+}
+
+Add restrictions to decryption
+*/
+
+theory NeedhamSchroederPKI
+begin
+
+builtins: asymmetric-encryption
+
+rule Register_pk:
+    [ Fr(~ltkA) ]
+    -->
+    [ !Ltk($A, ~ltkA), !Pk($A, pk(~ltkA)), Out(pk(~ltkA)) ]
+
+rule Reveal_ltk:
+    [ !Ltk(A, ltkA) ] --[ RevLtk(A) ]-> [ Out(ltkA) ]
+
+rule Init_I:
+	let
+        pkI = pk(ltkI)
+    in
+    [!Ltk(I,ltkI), !Pk(I, pkI)]
+    -->
+    [ St_I(I, ltkI, pkI) ]
+
+rule Init_R:
+    [!Ltk(R,ltkR), !Pk(R, pkR)]
+    -->
+    [ St_R(R, ltkR, pkR) ]
+
+rule I_1:
+    let 
+        m1 = aenc{'1', ~ni, I}pkR
+    in
+    [ Fr(~ni), !Pk(R, pkR), St_I(I, ltkI, pkI) ]
+    
+    --[ OUT_I_1(m1)]->
+    
+    [ Out( m1 ), St_I_1(I, ltkI, ~ni, R, pkR)]
+
+rule R_1:
+    let
+        m1 = aenc{'1', ni, I}pk(ltkR)
+        m1_dec = adec(m1,ltkR)
+        m1_fst = fst(m1_dec)
+        
+        m2 = aenc{'2', ni, ~nr }pkI
+    in
+    [ !Ltk(R, ltkR), In( m1 ), !Pk(I, pkI), Fr(~nr)]
+    
+    --[ IN_R_1_ni( ni, m1 ), OUT_R_1( m2 ), Eq(m1_fst,'1') ]->
+    
+    [ Out( m2 ), St_R_1(I, pkI, ni ,R, ltkR, ~nr) ]
+
+rule I_2:
+    let 
+        m2 = aenc{'2', ni, nr }pk(ltkI)
+        m2_dec = adec(m2,ltkI)
+        m2_fst = fst(m2_dec)
+        m3 = aenc{'3', nr}pkR
+    in
+    [ St_I_1(I, ltkI, ni, R, pkR), In( m2 ) ]
+
+    --[ IN_I_2_nr( nr, m2), Eq(m2_fst,'2') ]->
+    
+    [ Out( m3 ), Secret(I,R,nr), Secret(I,R,ni) ]
+
+rule R_2:
+	let
+        m3 = aenc{'3', nr}pk(ltkR)
+        m3_dec = adec(m3,ltkR)
+        m3_fst = fst(m3_dec)
+    in
+    [ St_R_1(I, pkI, ni , R, ltkR, nr), In(m3) ]
+    
+    --[ Commit(R, I, <'resp',ni,nr>), Eq(m3_fst,'3') ]->
+    
+    [ Secret(R,I,nr), Secret(R,I,ni) ]
+
+rule Secrecy_claim:
+    [ Secret(A, B, m) ] --[ Secret(A, B, m) ]-> []
+
+restriction Equality:
+    "All x y #i. Eq(x,y) @i ==> x = y"
+
+
+lemma types [sources]:
+    " 
+    (All ni m1 #i. IN_R_1_ni( ni, m1) @ i
+    ==>
+        ( (Ex #j. KU(ni) @ j & j < i)
+        | (Ex #j. OUT_I_1( m1 ) @ j)
+        )
+    )
+    & (All nr m2 #i. IN_I_2_nr( nr, m2) @ i
+    ==>
+        ( (Ex #j. KU(nr) @ j & j < i)
+        | (Ex #j. OUT_R_1( m2 ) @ j)
+        )
+    )
+    "
+
+lemma nonce_secrecy:
+    "
+    /* It cannot be that */
+    not( Ex A B s #i.
+        /* somebody claims to have setup a shared secret, */
+        Secret(A, B, s) @ i
+        /* but the adversary knows it */
+        & (Ex #j. K(s) @ j)
+        /* without having performed a long-term key reveal. */
+        & not (Ex #r. RevLtk(A) @ r)
+        & not (Ex #r. RevLtk(B) @ r)
+    )
+    "
+
+end

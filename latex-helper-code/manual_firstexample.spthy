@@ -5,6 +5,7 @@ begin
 
 builtins: hashing, asymmetric-encryption
 
+// -----------------------------------------------------------
 // ltk: long-term key
 // pk: public key
 // k: session key
@@ -40,13 +41,6 @@ rule Client_1:
     , Out( aenc(~k, pkS) )  // Send the encrypted session key to the server
     ]
 
-rule Client_2:
-    [ Client_1(S, k)   // Retrieve server and session key from previous step
-    , In( h(k) )       // Receive hashed session key from network
-    ]
-  --[ SessKeyC( S, k ) ]-> // State that the session key 'k'
-    []                     // was setup with server 'S'
-
 // A server thread answering in one-step to a session-key setup request from
 // some client.
 rule Serv_1:
@@ -57,6 +51,12 @@ rule Serv_1:
     [ Out( h(adec(request, ~ltkS)) ) ]            // Return the hash of the
                                                   // decrypted request.
 
+rule Client_2:
+    [ Client_1(S, k) // Retrieve server and session key from previous step
+    , In( h(k) )       // Receive hashed session key from network
+    ]
+  --[ SessKeyC( S, k ) ]-> // State that the session key 'k'
+    []                     // was setup with server 'S'
 
 lemma Client_session_key_secrecy:
   " // It cannot be that a 
