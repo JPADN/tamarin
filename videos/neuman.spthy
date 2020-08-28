@@ -1,0 +1,74 @@
+theory NeumanStubblebine
+begin
+
+builtins: symmetric-encryption // senc(m,k) = cifra
+                               
+
+rule Init:
+    [ Fr(~kas), Fr(~kbs) ]
+    -->
+    [ Init_A($A, ~kas), Init_B($B, ~kbs), Init_S($S, ~kas, ~kbs) ]
+
+rule 1_A_B:
+    [ Init_A(A, kas), Fr(~na) ]
+    -->
+    [ Out(<A,~na>), Tid_A(A, kas, ~na) ]
+
+rule 2_B_S:
+	let
+        x = senc(<A, na, ~tb>, kbs)
+        m = < B, ~nb, x >
+    in
+    [ Init_B(B, kbs), In(<A, na>), Fr(~nb), Fr(~tb) ]
+    -->
+    [ Out(m), Tid_B(B, kbs, ~nb, ~tb) ]
+
+rule 3_S_A:
+	let
+        // INPUT
+        x = senc(<A, na, tb>, kbs)
+        m = < B, nb, x > 
+
+        //OUTPUT
+        a = senc(<B, na,~kab, tb>, kas)
+        b = senc(<A, ~kab, tb>, kbs)
+        c = <a,b,nb>
+    in
+    [ Init_S(S, kas, kbs), In(m), Fr(~kab) ] 
+    -->
+    [ Out(c) ]
+
+rule 4_A_B:
+	let
+        // INPUT
+        a = senc(<B, na, kab, tb>, kas)
+        b = senc(<A, kab, tb>, kbs)
+        c = <a,b,nb>
+
+        // OUTPUT
+        e = senc(nb,kab)
+        m = <b,e>
+    in
+    [ In(c), Tid_A(A, kas, na) ] 
+    -->
+    [ Out(m) ]
+
+rule 5_B:
+	let
+        b = senc(<A, kab, tb>, kbs)
+        e = senc(nb,kab)
+        m = <b,e>
+    in
+    [ In(m), Tid_B(B, kbs, nb, tb) ]
+    -->
+    [  ]
+
+
+// -------------------
+
+
+// lemma nomeDaPropriedade:
+// "   "
+
+
+end

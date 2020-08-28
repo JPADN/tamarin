@@ -58,6 +58,7 @@ rule Client_2:
   --[ SessKeyC( S, k ) ]-> // State that the session key 'k'
     []                     // was setup with server 'S'
 
+
 lemma Client_session_key_secrecy:
   " // It cannot be that a 
     not(

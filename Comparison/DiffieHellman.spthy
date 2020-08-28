@@ -5,6 +5,10 @@ begin
 builtins: diffie-hellman
 functions: mac/2, shk/0 [private]  // Message Authentication Code and Constant Shared Secret Key
 
+
+private = ~ltk
+pubkey = 'g'^(~ltk)
+
 rule Client: 
     let 
         clientpub = 'g'^(~c_exp) 

@@ -1,0 +1,92 @@
+theory Yahalom
+begin
+
+builtins: symmetric-encryption
+
+// inicialiação protocolo simétrico
+
+rule Init:
+    [ Fr(~kas), Fr(~kbs) ]
+    -->
+    [ Init_A($A, ~kas), Init_B($B, ~kbs), Init_S($S, ~kas, ~kbs) ]
+
+
+rule 1_A_B:
+    [ Init_A(A, kas), Fr(~na) ]
+    -->
+    [ Out(<A, ~na>), Tid_A(A, kas, ~na) ]
+
+rule 2_B_S:
+	let
+        x = senc(<A, na, ~nb>, kbs)
+        m = <B, x>
+    in
+    [ Init_B(B, kbs), In(<A, na>), Fr(~nb) ]
+    --[ Out_B(m, kbs) ]->
+    [ Out(m), Tid_B(B, kbs, ~nb) ]
+
+rule 3_S_A:
+	let
+        // INPUT
+        x = senc(<A, na, nb>, kbs)
+        m = <B, x>
+
+        // OUTPUT
+        a = senc(<B, ~kab, na, nb>, kas)
+        b = senc(<A, ~kab>, kbs)
+        c = <a,b>
+    in
+    [ Init_S(S, kas, kbs), In(m), Fr(~kab) ]
+    --[ In_S(m, kbs), Out_S(c,kas) ]->
+    [ Out(c), Tid_S() ]
+
+
+// ====================================================
+
+rule 4_A_B:
+	let
+        // INPUT
+        a = senc(<B, kab, na, nb>, kas)
+        b = senc(<A, kab>, kbs)
+        c = <a,b>
+
+        // OUTPUT
+        x = senc(nb, kab)
+        y = <b,x>
+    in
+    [ In(c), Tid_A(A, kas, na) ]
+    --[ In_A(c,kas) ]->
+    [ Out(y) ]
+
+rule 5_B:
+	let
+        // INPUT
+        b = senc(<A, kab>, kbs)
+        x = senc(nb, kab)
+        y = <b,x>
+
+    in
+    [ In(y), Tid_B(b, kbs, nb) ]
+    -->
+    [  ]
+
+// 3_S_A e 4_A_B
+
+lemma types [sources]:
+    " 
+    (All c kas #i. In_A( c, kas) @ i
+    ==>
+        ( (Ex #j. KU(kas) @ j & j < i)
+        | (Ex #j. Out_S(c,kas) @ j)
+        )
+    )
+    & (All m kbs #i. In_S( m, kbs) @ i
+    ==>
+        ( (Ex #j. KU(kbs) @ j & j < i)
+        | (Ex #j. Out_B( m, kbs ) @ j)
+        )
+    )
+    "
+
+
+end
